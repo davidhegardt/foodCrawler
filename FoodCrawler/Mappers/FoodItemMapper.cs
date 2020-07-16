@@ -32,5 +32,31 @@ namespace FoodCrawler.Mappers
                 Vikt = product.Weight
             };
         }
+
+        public static List<FoodItem> MapCityGrossProductsToFoodItems(List<CityGrossProduct> grossProducts, string storeName)
+        {
+            var foodItems = new List<FoodItem>();
+            foreach(var product in grossProducts)
+            {
+                foodItems.Add(MapCityGrossToFoodItem(product, storeName));
+            }
+
+            return foodItems;
+        }
+
+        private static FoodItem MapCityGrossToFoodItem(CityGrossProduct product, string storeName)
+        {
+            return new FoodItem()
+            {
+                ID = product.ProductID,
+                Name = product.Title,
+                Store = storeName,
+                ExtraPrice = product.Specialprice,
+                Image = product.ImageURL,
+                Manufacturer = product.Manufacturer,
+                Price = product.Price,
+                Vikt = product.Unit
+            };
+        }
     }
 }

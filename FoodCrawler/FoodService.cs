@@ -17,22 +17,22 @@ namespace FoodCrawler
 {
     public static class FoodService
     {
-        public static async Task<List<Product>> GetStoreProducts(string storeName)
+        public static async Task<List<Product>> GetStoreProducts(Store storeEnum, Category categoryEnum)
         {
-            switch (storeName)
+            switch (storeEnum)
             {
-                case "Willys": return await GetWillysProducts();
-                case "Coop": return await GetCoopProducts();
-                case "CityGross": return await GetCityGrossProducts();
+                case Store.Coop: return await GetCoopProducts(categoryEnum);
+                //case Store.CityGross: return await GetCityGrossProducts();
+                case Store.Willys: return await GetWillysProducts(categoryEnum);
             }
 
             return null;
         }
 
-        private static async Task<List<Product>> GetWillysProducts()
+        private static async Task<List<Product>> GetWillysProducts(Category categoryEnum)
         {
-            var url = GetMainUrl("Willys");
-            var category = GetCategoryUrl("Willys", "Cheese");
+            var url = GetMainUrl(Store.Willys);
+            var category = GetCategoryUrl(Store.Willys, categoryEnum);
 
             url = $"{url}{category}";
 
@@ -42,10 +42,10 @@ namespace FoodCrawler
             return willys.ParseProducts(content);
         }
 
-        private static async Task<List<Product>> GetCoopProducts()
+        private static async Task<List<Product>> GetCoopProducts(Category categoryEnum)
         {
-            var url = GetMainUrl("Coop");
-            var category = GetCategoryUrl("Coop", "Cheese");
+            var url = GetMainUrl(Store.Coop);
+            var category = GetCategoryUrl(Store.Coop, categoryEnum);
 
             url = $"{url}{category}";
 
@@ -53,17 +53,20 @@ namespace FoodCrawler
             return await coop.StartParser(url);
         }
 
-        private static async Task<List<Product>> GetCityGrossProducts()
+        public static async Task<List<CityGrossProduct>> GetCityGrossProducts()
         {
-            var url = "https://www.citygross.se/matvaror/";
+            var startUrl = "https://www.citygross.se/matvaror/";
             var categories = GetCityGrossCategoryUrl("Cheese");
-
-            var firstUrl = $"{url}{categories[0]}";
-            var secondUrl = $"{url}{categories[1]}";
-            var thirdUrl = $"{url}{categories[2]}";
-
+            var allProducts = new List<CityGrossProduct>();
             CityGrossWebParser cityGross = new CityGrossWebParser();
-            return await cityGross.StartParser(firstUrl);
+
+            foreach (var category in categories)
+            {
+                var url = $"{startUrl}{category}";
+                var products = await cityGross.StartParser(url);
+                allProducts.AddRange(products);
+            }
+            return allProducts;
         }
 
         private static string[] GetCityGrossCategoryUrl(string category)
@@ -75,44 +78,44 @@ namespace FoodCrawler
             }
         }
 
-        private static string GetMainUrl(string storeName)
+        private static string GetMainUrl(Store storeName)
         {
             switch (storeName)
             {
-                case "Willys": return "https://www.willys.se/sortiment/";
-                case "Coop": return "https://www.coop.se/handla/varor/";
+                case Store.Willys: return "https://www.willys.se/sortiment/";
+                case Store.Coop: return "https://www.coop.se/handla/varor/";
                 default: return string.Empty;
             }
         }
 
-        private static string GetCategoryUrl(string storeName,string category)
+        private static string GetCategoryUrl(Store storeName,Category category)
         {
             switch (storeName)
             {
-                case "Willys": return GetWillysCategoryUrl(category);
-                case "Coop": return GetCoopCategoryUrl(category);                
+                case Store.Willys: return GetWillysCategoryUrl(category);
+                case Store.Coop: return GetCoopCategoryUrl(category);
                 default: return string.Empty;
             }
         }
 
-        private static string GetCoopCategoryUrl(string category)
+        private static string GetCoopCategoryUrl(Category category)
         {
             switch (category)
             {
-                case "Cheese": return "ost";
-                case "Diary": return "mejeri-agg";
-                case "Meat": return "kott-fagel";
+                case Category.Cheese: return "ost";
+                case Category.Diary: return "mejeri-agg";
+                case Category.Meat: return "kott-fagel";
                 default: return string.Empty;
             }
         }
 
-        private static string GetWillysCategoryUrl(string category)
+        private static string GetWillysCategoryUrl(Category category)
         {
             switch (category)
             {
-                case "Diary": return "Mejeri-ost-och-agg";
-                case "Cheese": return "Mejeri-ost-och-agg/Ost";
-                case "Meat": return "Kott-chark-och-fagel";
+                case Category.Diary: return "Mejeri-ost-och-agg";
+                case Category.Cheese: return "Mejeri-ost-och-agg/Ost";
+                case Category.Meat: return "Kott-chark-och-fagel";
                 default: return string.Empty;
             }
         }

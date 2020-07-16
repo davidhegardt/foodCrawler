@@ -8,24 +8,38 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace FoodCrawler.Parsers
 {
     public class CityGrossWebParser
     {
-        public async Task<List<Product>> StartParser(string url)
+        private List<SpecialPrice> specialPriceList;
+        private ChromeDriver driver;
+
+        public CityGrossWebParser()
         {
             ChromeOptions options = new ChromeOptions();
+            driver = new ChromeDriver();
+        }
+                
+        public async Task<List<CityGrossProduct>> StartParser(string url)
+        {
+            //ChromeOptions options = new ChromeOptions();
             // TODO : Add headless option
             //options.AddArguments("headless");
-            var driver = new ChromeDriver(options);
+            //var driver = new ChromeDriver(options);
 
             driver.Navigate().GoToUrl(url);
+            new WebDriverWait(driver, TimeSpan.FromSeconds(2)).Until(ExpectedConditions.ElementExists((By.XPath("//*[contains(@class,'c-loadmore__status')]"))));
             var content = driver.PageSource;
 
             var htmlDocument = new HtmlDocument();
             htmlDocument.LoadHtml(content);
+
+            //driver.manage().timeouts().implicitlyWait(number_of_seconds, TimeUnit.SECONDS);
+            
 
             var countTest = htmlDocument.DocumentNode.SelectNodes("//*[contains(@class,'c-loadmore__status')]").First().InnerText;
             var countString = parseCount(countTest);
@@ -37,7 +51,7 @@ namespace FoodCrawler.Parsers
             ex.ExecuteScript("window.scrollTo(0, document.body.scrollHeight)");
 
             bool fortsatt = true;
-            new WebDriverWait(driver, TimeSpan.FromSeconds(2)).Until(ExpectedConditions.ElementExists((By.XPath("//*[contains(@class,'product-card__lower-container')]"))));
+            new WebDriverWait(driver, TimeSpan.FromSeconds(3)).Until(ExpectedConditions.ElementExists((By.XPath("//*[contains(@class,'product-card__lower-container')]"))));
             var fullContent = driver.PageSource;
             htmlDocument.LoadHtml(fullContent);
 
@@ -80,14 +94,15 @@ namespace FoodCrawler.Parsers
 
         }
 
-        private List<Product> SetupProducts(List<string> titles,List<string> brandList, 
+        private List<CityGrossProduct> SetupProducts(List<string> titles,List<string> brandList, 
             List<string> weightList, List<double> priceList,List<string> unitList, List<string> imagePaths)
         {
-            List<Product> productList = new List<Product>();
+            List<CityGrossProduct> productList = new List<CityGrossProduct>();
             for (int i = 0; i < titles.Count; i++)
             {
-                var product = new Product()
+                var product = new CityGrossProduct()
                 {
+                    ProductID = i,
                     Title = titles[i],
                     Manufacturer = brandList[i],
                     ImageURL = imagePaths[i],
@@ -96,6 +111,11 @@ namespace FoodCrawler.Parsers
                     Unit = unitList[i]
                 };
                 productList.Add(product);
+            }
+
+            foreach(var cityProduct in productList)
+            {
+                cityProduct.Specialprice = specialPriceList.FirstOrDefault(x => x.ProductId.Equals(cityProduct.ProductID));
             }
 
             return productList;
@@ -136,16 +156,50 @@ namespace FoodCrawler.Parsers
         {
             List<double> priceList = new List<double>();
             List<string> unitList = new List<string>();
+            specialPriceList = new List<SpecialPrice>();
 
+            string totalPrice = string.Empty;
+            int productCount = 0;
             foreach (var product in htmlNodes)
             {
-                var jmfrPris = product.ChildNodes[1];
-                //product.SelectNodes(By.XPath(""))
-                var priceTest = jmfrPris.SelectSingleNode(".//span[contains(@class,'integer')]");
-                //var singlePriceTest = jmfrPris.ChildNodes.Where(child => child.)
-                var decimalTest = jmfrPris.SelectNodes(".//span[contains(@class, 'fractions')]/text()");
-                //var priceTuple = parsePrice(jmfrPris);
+                try
+                {
+                    var jmfrPris = product.ChildNodes[1];
+                    //product.SelectNodes(By.XPath(""))
+                    var integerPrice = jmfrPris.SelectSingleNode(".//span[contains(@class,'integer')]").InnerText;
+                    var unit = jmfrPris.SelectSingleNode(".//span[contains(@class,'unit')]");
+                    if (unit != null)
+                        unitList.Add(unit.InnerText);
+                    else
+                        unitList.Add("st");
+                    //var singlePriceTest = jmfrPris.ChildNodes.Where(child => child.)
+                    var decimalTest = jmfrPris.SelectNodes(".//span[contains(@class, 'fractions')]/text()");
+                    if (decimalTest != null)
+                        totalPrice = $"{integerPrice}.{decimalTest.FirstOrDefault().InnerText}";
+                    else
+                        totalPrice = integerPrice;
+                    double outPrice;
+                    double priceValue;
+                    if (double.TryParse(totalPrice,NumberStyles.Number, CultureInfo.InvariantCulture, out outPrice))
+                    {
+                        priceValue = double.Parse(totalPrice, CultureInfo.InvariantCulture);
+                    } else
+                    {
+                        var specialPrice = ParseExtraPrice(jmfrPris, productCount);
+                        priceValue = specialPrice.OrdinaryPrice;
+                        specialPriceList.Add(specialPrice);
+                    }
+                    
+                    //var priceTuple = parsePrice(jmfrPris);
+                    priceList.Add(priceValue);
 
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex);
+                    break;
+                }
+                productCount++;
                 //var priceValue = priceTuple.Item1;
                 //priceList.Add(priceValue);
                 //var unit = priceTuple.Item2;
@@ -153,6 +207,41 @@ namespace FoodCrawler.Parsers
             }
 
             return (priceList, unitList);
+        }
+
+        private SpecialPrice ParseExtraPrice(HtmlNode node, int productID)
+        {
+            var extraPrice = new SpecialPrice();
+            extraPrice.ProductId = productID;
+            string quantityString = string.Empty;
+            int quantity = 0;
+            var extraQty = node.SelectSingleNode(".//p[contains(@class,'c-pricetag__effect-type')]");
+            var ordinaryPrice = node.SelectSingleNode(".//span[contains(@class, 'bold ordinal')]");
+            if (extraQty != null)
+            {
+                quantityString  = Regex.Match(extraQty.InnerText, @"\d+").Value;
+                quantity = int.Parse(quantityString);
+                extraPrice.Quantity = quantity;
+            }
+            if (ordinaryPrice != null)
+            {                
+                string[] priceParts = ordinaryPrice.InnerText.Split(',');
+                var integerPart = new String(priceParts[0].Where(Char.IsDigit).ToArray());
+                var decimalPart = new String(priceParts[1].Where(Char.IsDigit).ToArray());
+                var ordinaryPriceString = $"{integerPart}.{decimalPart}";
+                var priceValue = double.Parse(ordinaryPriceString, CultureInfo.InvariantCulture);
+                extraPrice.OrdinaryPrice = priceValue;
+            }
+            var integerPriceParseFail = node.SelectSingleNode(".//span[contains(@class,'integer')]").InnerText;
+            var integerPriceString = new String(integerPriceParseFail.Where(Char.IsDigit).ToArray());
+            if (extraQty == null)
+            {
+                extraPrice.Extrapris = double.Parse(integerPriceString);
+                //return double.Parse(integerPriceString);
+            }
+            //double newPrice = int.Parse(integerPriceString) / quantity;
+            //return newPrice;
+            return extraPrice;
         }
 
         private List<string> GetImageUrls(HtmlNodeCollection htmlNodes)
@@ -187,9 +276,9 @@ namespace FoodCrawler.Parsers
 
         private string parseCount(string nodeContent)
         {
-            string count = nodeContent.Substring(nodeContent.IndexOf("av") + 2, 5);
-            count = count.Trim();
-            return count;
+            string count = nodeContent.Substring(nodeContent.IndexOf("av"));
+            var numericCount = new String(count.Where(Char.IsDigit).ToArray());            
+            return numericCount;
         }
 
         private (string,string) parseManufacturerWeight(string manufacturerAndWeight)

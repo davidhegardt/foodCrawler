@@ -1,0 +1,34 @@
+/* Provide sufficient contrast against white background */
+a {
+  color: #0366d6;
+}
+
+code {
+  color: #E01A76;
+}
+
+.btn-primary {
+  color: #fff;
+  background-color: #1b6ec2;
+  border-color: #1861ac;
+}
+
+cardMaxWidth {
+  max-width: 345;
+}
+
+cardHeight {
+  height: 140;
+}
+
+
+.cardStyle {
+  width: 300;
+  color: green($color: #000000);
+  margin: auto;
+  height: 210;
+  box-shadow: "0 8px 40px -12px rgba(0,0,0,0.3)",
+    "&:hover" {
+      box-shadow: "0 16px 70px -12.125px rgba(0,0,0,0.3)"
+    }
+}

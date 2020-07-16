@@ -15,5 +15,6 @@ namespace FoodCrawler.Models
         public string Image { get; set; }
         public string Vikt { get; set; }
         public string Unit { get; set; }
+        public SpecialPrice ExtraPrice { get; set; }
     }
 }
